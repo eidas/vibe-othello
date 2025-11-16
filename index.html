@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>オセロ - 人 vs COM</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --board-bg: #0a5a1c;
+      --board-grid: #0f7a26;
+      --cell-size: 60px;
+      --disc-black: #111;
+      --disc-white: #f7f7f7;
+      --highlight: rgba(255, 255, 0, 0.35);
+      --shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      --accent: #308bff;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Helvetica Neue", Arial, "Noto Sans JP", system-ui, sans-serif;
+      background: radial-gradient(circle at 20% 20%, #f5f8ff, #d9e7ff, #cbe2ff);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 24px;
+      padding: 24px 12px 48px;
+      box-sizing: border-box;
+    }
+
+    h1 {
+      margin: 0;
+      letter-spacing: 0.08em;
+      color: #0d3055;
+      text-shadow: 0 1px 2px rgba(255, 255, 255, 0.4);
+    }
+
+    .wrapper {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: start;
+      gap: 20px;
+      width: min(1200px, 100%);
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(4px);
+    }
+
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, var(--cell-size));
+      grid-template-rows: repeat(8, var(--cell-size));
+      background: var(--board-bg);
+      border: 6px solid #0b3b1c;
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cell {
+      width: var(--cell-size);
+      height: var(--cell-size);
+      border: 1px solid var(--board-grid);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: background-color 120ms ease-in-out;
+    }
+
+    .cell.highlight {
+      background-color: var(--highlight);
+    }
+
+    .disc {
+      width: 70%;
+      height: 70%;
+      border-radius: 50%;
+      box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.5), inset 0 -3px 5px rgba(0, 0, 0, 0.45), 0 4px 6px rgba(0, 0, 0, 0.35);
+      transition: transform 120ms ease, opacity 120ms ease;
+      transform: scale(0.9);
+    }
+
+    .disc.black {
+      background: linear-gradient(145deg, #222, #000);
+      border: 2px solid #000;
+    }
+
+    .disc.white {
+      background: linear-gradient(145deg, #fff, #d8d8d8);
+      border: 2px solid #d0d0d0;
+    }
+
+    .scores {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .score {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: #eef5ff;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    .badge {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid #264;
+    }
+
+    .badge.black { background: var(--disc-black); }
+    .badge.white { background: var(--disc-white); }
+
+    #log {
+      height: 380px;
+      overflow: auto;
+      font-size: 14px;
+      background: #0a1c30;
+      color: #e3f1ff;
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+      line-height: 1.4;
+    }
+
+    #controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-top: 8px;
+    }
+
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, #2d7bff, #2155c7);
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+    }
+
+    button:active {
+      transform: translateY(1px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    @media (max-width: 960px) {
+      :root { --cell-size: 48px; }
+      .wrapper { grid-template-columns: 1fr; }
+      #log { height: 200px; }
+    }
+  </style>
+</head>
+<body>
+  <h1>オセロ - 人 vs COM</h1>
+  <div class="wrapper">
+    <div class="panel" aria-live="polite">
+      <div class="scores">
+        <div class="score"><span class="badge black" aria-hidden="true"></span><span id="label-black">黒(あなた)</span>: <span id="score-black">2</span></div>
+        <div class="score"><span class="badge white" aria-hidden="true"></span><span id="label-white">白(COM)</span>: <span id="score-white">2</span></div>
+      </div>
+      <div id="board" aria-label="オセロ盤面"></div>
+      <div id="controls">
+        <div>
+          <label><input type="radio" name="starter" value="player" checked />あなたが黒(先手)</label>
+          <label style="margin-left: 12px;"><input type="radio" name="starter" value="computer" />COMが黒(先手)</label>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <button id="restart">最初から</button>
+          <span id="turn-label">黒の番です</span>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>ゲームログ</h3>
+      <div id="log" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <script>
+    const SIZE = 8;
+    const EMPTY = 0;
+    const BLACK = 1; // Player
+    const WHITE = 2; // Computer
+    const DIRECTIONS = [
+      [-1, -1], [-1, 0], [-1, 1],
+      [0, -1],          [0, 1],
+      [1, -1],  [1, 0], [1, 1]
+    ];
+
+    const boardEl = document.getElementById('board');
+    const turnLabel = document.getElementById('turn-label');
+    const scoreBlackEl = document.getElementById('score-black');
+    const scoreWhiteEl = document.getElementById('score-white');
+    const labelBlackEl = document.getElementById('label-black');
+    const labelWhiteEl = document.getElementById('label-white');
+    const logEl = document.getElementById('log');
+    const restartBtn = document.getElementById('restart');
+
+    let board = Array.from({ length: SIZE }, () => Array(SIZE).fill(EMPTY));
+    let current = BLACK;
+    let gameOver = false;
+    let humanColor = BLACK;
+    let computerColor = WHITE;
+
+    function log(message) {
+      const time = new Date().toLocaleTimeString('ja-JP', { hour12: false });
+      const entry = document.createElement('div');
+      entry.textContent = `[${time}] ${message}`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setupBoard() {
+      boardEl.innerHTML = '';
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          cell.addEventListener('click', onCellClick);
+          boardEl.appendChild(cell);
+        }
+      }
+    }
+
+    function initGame() {
+      const starter = document.querySelector('input[name="starter"]:checked')?.value ?? 'player';
+      humanColor = starter === 'player' ? BLACK : WHITE;
+      computerColor = humanColor === BLACK ? WHITE : BLACK;
+
+      board = Array.from({ length: SIZE }, () => Array(SIZE).fill(EMPTY));
+      board[3][3] = WHITE;
+      board[3][4] = BLACK;
+      board[4][3] = BLACK;
+      board[4][4] = WHITE;
+      current = BLACK;
+      gameOver = false;
+      logEl.innerHTML = '';
+      updateRoleLabels();
+      log(`ゲームを開始しました。${humanColor === BLACK ? 'あなたは黒(先手)' : 'あなたは白(後手)'}です。`);
+      updateBoard();
+
+      if (current === computerColor) {
+        setTimeout(computerTurn, 360);
+      }
+    }
+
+    function onCellClick(e) {
+      if (gameOver || current !== humanColor) return;
+      const row = Number(e.currentTarget.dataset.row);
+      const col = Number(e.currentTarget.dataset.col);
+      const flips = getFlips(board, row, col, humanColor);
+      if (flips.length === 0) return;
+      placeDisc(row, col, humanColor, flips);
+      proceedTurn();
+    }
+
+    function proceedTurn() {
+      updateBoard();
+      if (gameOver) return;
+
+      const playerMoves = getAllValidMoves(board, humanColor);
+      const computerMoves = getAllValidMoves(board, computerColor);
+
+      if (playerMoves.length === 0 && computerMoves.length === 0) {
+        finishGame();
+        return;
+      }
+
+      if (current === humanColor && playerMoves.length === 0) {
+        log('あなたはパスしました。');
+        current = computerColor;
+      }
+
+      if (current === computerColor && computerMoves.length === 0) {
+        log('COMはパスしました。');
+        current = humanColor;
+      }
+
+      updateBoard();
+
+      if (current === computerColor) {
+        setTimeout(computerTurn, 420);
+      }
+    }
+
+    function computerTurn() {
+      const moves = getAllValidMoves(board, computerColor);
+      if (moves.length === 0) {
+        current = humanColor;
+        updateBoard();
+        return;
+      }
+      const choice = selectComputerMove(moves, board);
+      placeDisc(choice.row, choice.col, computerColor, choice.flips);
+      current = humanColor;
+      proceedTurn();
+    }
+
+    function selectComputerMove(moves, state) {
+      const cornerSet = new Set(['0,0', '0,7', '7,0', '7,7']);
+      const cornerMoves = moves.filter(m => cornerSet.has(`${m.row},${m.col}`));
+      if (cornerMoves.length) return cornerMoves[0];
+
+      // Simple heuristic: prioritize moves with high flip count and low exposure
+      const mobilityScore = getMobilityScore(state, computerColor);
+      return moves.map(m => {
+        const next = cloneBoard(state);
+        placeDiscOnBoard(next, m.row, m.col, computerColor, m.flips);
+        const flips = m.flips.length;
+        const mobility = getMobilityScore(next, computerColor) - mobilityScore;
+        const stability = -getFrontierCount(next, computerColor);
+        const priority = flips * 1.5 + mobility * 0.8 + stability * 0.2;
+        return { ...m, priority };
+      }).sort((a, b) => b.priority - a.priority)[0];
+    }
+
+    function getMobilityScore(state, color) {
+      return getAllValidMoves(state, color).length;
+    }
+
+    function getFrontierCount(state, color) {
+      let count = 0;
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          if (state[r][c] === color) {
+            if (DIRECTIONS.some(([dr, dc]) => state[r + dr]?.[c + dc] === EMPTY)) {
+              count++;
+            }
+          }
+        }
+      }
+      return count;
+    }
+
+    function placeDisc(row, col, color, flips) {
+      placeDiscOnBoard(board, row, col, color, flips);
+      log(`${getActorName(color)}が (${row + 1}, ${col + 1}) に置きました。`);
+      current = color === BLACK ? WHITE : BLACK;
+    }
+
+    function placeDiscOnBoard(state, row, col, color, flips) {
+      state[row][col] = color;
+      flips.forEach(([r, c]) => state[r][c] = color);
+    }
+
+    function getFlips(state, row, col, color) {
+      if (state[row][col] !== EMPTY) return [];
+      const flips = [];
+      for (const [dr, dc] of DIRECTIONS) {
+        const path = [];
+        let r = row + dr;
+        let c = col + dc;
+        while (r >= 0 && r < SIZE && c >= 0 && c < SIZE) {
+          const cell = state[r][c];
+          if (cell === EMPTY) break;
+          if (cell === color) {
+            flips.push(...path);
+            break;
+          }
+          path.push([r, c]);
+          r += dr;
+          c += dc;
+        }
+      }
+      return flips;
+    }
+
+    function getAllValidMoves(state, color) {
+      const moves = [];
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          const flips = getFlips(state, r, c, color);
+          if (flips.length > 0) moves.push({ row: r, col: c, flips });
+        }
+      }
+      return moves;
+    }
+
+    function updateBoard() {
+      for (const cell of boardEl.children) {
+        const r = Number(cell.dataset.row);
+        const c = Number(cell.dataset.col);
+        const val = board[r][c];
+        cell.innerHTML = '';
+        cell.classList.remove('highlight');
+        if (val !== EMPTY) {
+          const disc = document.createElement('div');
+          disc.className = `disc ${val === BLACK ? 'black' : 'white'}`;
+          cell.appendChild(disc);
+        }
+      }
+
+      const moves = current === BLACK ? getAllValidMoves(board, BLACK) : getAllValidMoves(board, WHITE);
+      moves.forEach(({ row, col }) => {
+        const index = row * SIZE + col;
+        boardEl.children[index].classList.add('highlight');
+      });
+
+      const { black, white } = countDiscs(board);
+      scoreBlackEl.textContent = black;
+      scoreWhiteEl.textContent = white;
+      turnLabel.textContent = gameOver ? 'ゲーム終了' : `${getActorName(current)}（${current === BLACK ? '黒' : '白'}）の番です`;
+    }
+
+    function countDiscs(state) {
+      let black = 0, white = 0;
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          if (state[r][c] === BLACK) black++;
+          else if (state[r][c] === WHITE) white++;
+        }
+      }
+      return { black, white };
+    }
+
+    function finishGame() {
+      const { black, white } = countDiscs(board);
+      let result = '引き分けです。';
+      if (black > white) result = humanColor === BLACK ? 'あなたの勝ちです！' : 'COMの勝ちです。';
+      else if (white > black) result = humanColor === WHITE ? 'あなたの勝ちです！' : 'COMの勝ちです。';
+      log(`ゲーム終了: ${result} (黒:${black} 白:${white})`);
+      turnLabel.textContent = 'ゲーム終了';
+      gameOver = true;
+      updateBoard();
+    }
+
+    function cloneBoard(state) {
+      return state.map(row => [...row]);
+    }
+
+    function getActorName(color) {
+      return color === humanColor ? 'あなた' : 'COM';
+    }
+
+    function updateRoleLabels() {
+      labelBlackEl.textContent = humanColor === BLACK ? '黒(あなた)' : '黒(COM)';
+      labelWhiteEl.textContent = humanColor === WHITE ? '白(あなた)' : '白(COM)';
+    }
+
+    restartBtn.addEventListener('click', initGame);
+
+    setupBoard();
+    initGame();
+  </script>
+</body>
+</html>
